@@ -1,13 +1,8 @@
-# TG3442DE IP address
-ip_address: 192.168.100.1
+ip_address: ${ip_address}
+password: ${password}
 
-# TG3442DE web interface password
-password: C8d6d34qcxy!!
-
-# All following parameters are optional.
 exporter:
   do_not_remove_this_line:
-
   # port on which this exporter exposes metrics (default: 9706)
   #port: 9706
 
@@ -23,4 +18,3 @@ exporter:
   # Customize the family of metrics to scrape. By default, the 
   # log-metrics (call_log_local and event_log_local) are not scraped.
   #metrics: [device_status, docsis_status, overview_status, phone_status, call_log_local, event_log_local ]
-
