@@ -117,7 +117,25 @@ class DocsisStatusExtractor(HtmlMetricsExtractor):
             "Downstream locking status",
             labels=[CHANNEL_ID],
         )
+        scqam_position = 0
         for channel in downstream_data:
+            if channel["ChannelType"] == "SC-QAM":
+                scqam_position += 1
+
+            # dropped channels report channel id zero and empty measurements, their actual id follows from the table position
+            if channel["PowerLevel"] == "":
+                if (channel["ChannelType"] != "SC-QAM" or channel["ChannelID"] != "0"
+                        or channel["Frequency"] != "" or channel["SNRLevel"] != ""
+                        or channel["LockStatus"] != 0):
+                    self.logger.error(f"Downstream channel row has unknown shape: {channel}")
+                    raise ValueError("Downstream channel row has unknown shape")
+                ds_locked.add_metric([str(scqam_position).zfill(2)], 0)
+                continue
+
+            if channel["ChannelType"] == "SC-QAM" and int(channel["ChannelID"]) != scqam_position:
+                self.logger.error(f"Downstream channel id does not match table position {scqam_position}: {channel}")
+                raise ValueError("Downstream channel id does not match table position")
+
             channel_id = channel["ChannelID"]
             channel_type = self.get_channel_type(channel['ChannelType'])
             channel_modulation = self.get_channel_modulation(channel['Modulation'])
