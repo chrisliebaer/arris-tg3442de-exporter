@@ -85,7 +85,7 @@ class OverviewExtractor(HtmlMetricsExtractor):
         lan_speed = GaugeMetricFamily(
             "tg3442de_lan_speed",
             "Ethernet client network speed",
-            unit="MHz",
+            unit="Mbps",
             labels=['index','hostname','MAC','IPv4','IPv6'],
         )
         self.add_devices(lan_devices, lan_speed,'Speed')
@@ -95,7 +95,7 @@ class OverviewExtractor(HtmlMetricsExtractor):
         prim_wlan_linkrate = GaugeMetricFamily(
             "tg3442de_primary_wlan_linkrate",
             "Primary WLAN client link rate",
-            unit="MHz",
+            unit="Mbps",
             labels=['index','hostname','MAC','IPv4','IPv6'],
         )
         self.add_devices(prim_wlan_devices, prim_wlan_linkrate,'LinkRate')
@@ -105,7 +105,7 @@ class OverviewExtractor(HtmlMetricsExtractor):
         guest_wlan_linkrate = GaugeMetricFamily(
             "tg3442de_guest_wlan_linkrate",
             "Guest WLAN client link rate",
-            unit="MHz",
+            unit="Mbps",
             labels=['index','hostname','MAC','IPv4','IPv6'],
         )
         self.add_devices(guest_wlan_devices, guest_wlan_linkrate,'LinkRate')
