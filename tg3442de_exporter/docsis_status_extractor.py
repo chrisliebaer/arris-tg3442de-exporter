@@ -34,6 +34,9 @@ class ChannelModulation(Enum):
     QAM16   = '16QAM'
     QPSK    = 'QPSK'
 
+    # reported by unlocked channels
+    UNSUPPORTED = 'UNSUPPORTED'
+
     # default case for all future unknown channel modulation
     UNKNOWN = 'unknown'
 
