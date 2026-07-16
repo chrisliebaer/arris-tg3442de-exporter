@@ -117,24 +117,27 @@ class DocsisStatusExtractor(HtmlMetricsExtractor):
             "Downstream locking status",
             labels=[CHANNEL_ID],
         )
-        scqam_position = 0
+        scqam_count = 0
+        reported_scqam_ids = set()
         for channel in downstream_data:
             if channel["ChannelType"] == "SC-QAM":
-                scqam_position += 1
+                scqam_count += 1
 
-            # dropped channels report channel id zero and empty measurements, their actual id follows from the table position
+            # dropped channels are fully masked: id zero, empty measurements, not locked
             if channel["PowerLevel"] == "":
                 if (channel["ChannelType"] != "SC-QAM" or channel["ChannelID"] != "0"
                         or channel["Frequency"] != "" or channel["SNRLevel"] != ""
                         or channel["LockStatus"] != 0):
                     self.logger.error(f"Downstream channel row has unknown shape: {channel}")
                     raise ValueError("Downstream channel row has unknown shape")
-                ds_locked.add_metric([str(scqam_position).zfill(2)], 0)
                 continue
 
-            if channel["ChannelType"] == "SC-QAM" and int(channel["ChannelID"]) != scqam_position:
-                self.logger.error(f"Downstream channel id does not match table position {scqam_position}: {channel}")
-                raise ValueError("Downstream channel id does not match table position")
+            if channel["ChannelType"] == "SC-QAM":
+                scqam_id = int(channel["ChannelID"])
+                if scqam_id in reported_scqam_ids:
+                    self.logger.error(f"Duplicate downstream channel id: {channel}")
+                    raise ValueError("Duplicate downstream channel id")
+                reported_scqam_ids.add(scqam_id)
 
             channel_id = channel["ChannelID"]
             channel_type = self.get_channel_type(channel['ChannelType'])
@@ -152,6 +155,13 @@ class DocsisStatusExtractor(HtmlMetricsExtractor):
             ds_frequency.add_metric(labels_full, float(frequency))
             ds_power_level.add_metric(labels_full, float(power_level_mV))
             ds_snr.add_metric(labels_full, float(snr_level))
+
+        # SC-QAM channel ids occupy 1..N for N table rows, so the masked rows are the unreported remainder
+        if any(scqam_id < 1 or scqam_id > scqam_count for scqam_id in reported_scqam_ids):
+            self.logger.error(f"Downstream channel ids exceed table size {scqam_count}: {sorted(reported_scqam_ids)}")
+            raise ValueError("Downstream channel id outside table range")
+        for masked_id in sorted(set(range(1, scqam_count + 1)) - reported_scqam_ids):
+            ds_locked.add_metric([str(masked_id).zfill(2)], 0)
         yield from [ds_frequency, ds_power_level, ds_snr, ds_locked]
 
         us_frequency = GaugeMetricFamily(
