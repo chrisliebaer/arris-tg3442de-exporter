@@ -86,10 +86,13 @@ class DocsisStatusExtractor(HtmlMetricsExtractor):
         # convert lock status to numeric values
         for d in [ upstream_data, downstream_data ]:
             for c in d:
-                if c['LockStatus'] == "ACTIVE" or c['LockStatus'] == "Locked" or c['LockStatus'] == "SUCCESS":
+                if c['LockStatus'] in ("ACTIVE", "Locked", "SUCCESS", "OPERATE"):
                     c['LockStatus'] = 1
-                else:
+                elif c['LockStatus'] == "NotLocked":
                     c['LockStatus'] = 0
+                else:
+                    self.logger.error(f"Unknown lock status: {c}")
+                    raise ValueError("Unknown lock status")
         
         CHANNEL_ID = 'channel_id'
         CHANNEL_TYPE = 'channel_type'
