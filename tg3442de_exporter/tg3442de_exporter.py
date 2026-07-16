@@ -24,7 +24,7 @@ from prometheus_client import CollectorRegistry, MetricsHandler
 from prometheus_client.metrics_core import GaugeMetricFamily
 from requests import Timeout
 
-from tg3442de_exporter.tg3442de import TG3442DE
+from tg3442de_exporter.tg3442de import TG3442DE, SessionLost
 from tg3442de_exporter.config import (
     load_config,
     IP_ADDRESS,
@@ -66,6 +66,26 @@ class TG3442DECollector(object):
         extractors = exporter_config[EXTRACTORS]
         self.metric_extractors = [get_metrics_extractor(e, logger,exporter_config) for e in extractors]
 
+        # holds the instance with the current modem session, None whenever no valid session exists
+        self.box = None
+
+    def _login(self):
+        box = TG3442DE(
+            self.logger, self.ip_address, key=self.password, timeout=self.timeout, simulate=self.simulate
+        )
+        box.login()
+        self.logger.info("Logged in at " + self.ip_address)
+        return box
+
+    def _get_page(self, page):
+        try:
+            return self.box.html_getter(page, "")
+        except SessionLost:
+            self.logger.warning("Session lost, logging in again")
+            self.box = None
+            self.box = self._login()
+            return self.box.html_getter(page, "")
+
     def collect(self):
         # Collect scrape duration and scrape success for each extractor. Scrape success is initialized with False for
         # all extractors so that we can report a value for each extractor even in cases where we abort midway through
@@ -74,20 +94,17 @@ class TG3442DECollector(object):
         scrape_success = {}
         self.logger.info("Collecting from " + self.ip_address)
 
-        # attempt login
+        # the session is retained between scrapes, a login only happens while no valid session is held
         login_logout_success = True
-        try:
-            box = TG3442DE(
-                self.logger, self.ip_address, key=self.password, timeout=self.timeout, simulate=self.simulate
-            )
-            box.login()
-        except (ConnectionError, Timeout, ValueError) as e:
-            self.logger.error(repr(e))
-            box = None
-            login_logout_success = False
+        if self.box is None:
+            try:
+                self.box = self._login()
+            except (ConnectionError, Timeout, ValueError) as e:
+                self.logger.error(repr(e))
+                login_logout_success = False
 
         # skip extracting further metrics if login failed
-        if box is not None:
+        if self.box is not None:
             for extractor in self.metric_extractors:
                 #self.logger.debug("extractor ="+str(extractor))
                 raw_htmls = {}
@@ -97,7 +114,7 @@ class TG3442DECollector(object):
                     # obtain all raw html responses for an extractor, then extract metrics
                     for page in extractor.pages:
                         self.logger.debug(f"Querying page={page}...")
-                        raw_html = box.html_getter(page, "")
+                        raw_html = self._get_page(page)
                         self.logger.debug(
                             f"Raw HTML response for page={page}:\n{raw_html}"
                         )
@@ -108,6 +125,11 @@ class TG3442DECollector(object):
                     scrape_duration[extractor.name] = post_scrape_time - pre_scrape_time
                     scrape_success[extractor.name] = True
 
+                except SessionLost:
+                    self.logger.error(f"Failed to extract '{extractor.name}', session lost and relogin did not restore it.")
+                    self.box = None
+                    login_logout_success = False
+                    break
                 except (ValueError, KeyError, AssertionError) as e:
                     stack = traceback.format_exc()
                     message = f"Failed to extract '{extractor.name}'. \n{stack}"
@@ -124,12 +146,6 @@ class TG3442DECollector(object):
                     self.logger.error(message)
                     break
 
-            # attempt logout once done
-            try:
-                box.logout()
-            except Exception as e:
-                self.logger.error(repr(e))
-                login_logout_success = False
         scrape_success["login_logout"] = int(login_logout_success)
 
         # create metrics from previously durations and successes collected

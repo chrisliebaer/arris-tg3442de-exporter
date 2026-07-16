@@ -6,6 +6,9 @@ import re
 import requests
 import sys
 
+class SessionLost(Exception):
+    """Raised when the modem rejects a request because the session is no longer valid."""
+
 class TG3442DE():
     def __init__(self,logger, address, key, timeout,simulate=False):
         self.logger = logger
@@ -114,6 +117,8 @@ class TG3442DE():
         result = ''
         if self.simulate == False:
             r = self.session.get(f"{self.url}{page}",timeout=self.timeout)
+            if "SESSION_LOST" in r.text:
+                raise SessionLost(f"Session rejected by modem on page {page}")
             if r != None:
                 if int(r.status_code) == 200:
                     result = r.text
